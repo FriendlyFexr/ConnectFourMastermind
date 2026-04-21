@@ -1,112 +1,56 @@
 <!DOCTYPE html>
-<html lang="en">
+<html>
 <head>
-    <meta charset="UTF-8">
     <title>Connect 4 AI</title>
-    <style>
-        body { font-family: sans-serif; display: flex; flex-direction: column; align-items: center; background: #f0f2f5; }
-        #board { display: grid; grid-template-columns: repeat(7, 60px); gap: 5px; margin-top: 20px; background: #2d3436; padding: 10px; border-radius: 8px; }
-        .cell { width: 60px; height: 60px; background: #dfe6e9; border-radius: 50%; cursor: pointer; }
-        .p1 { background: #d63031; } /* Human */
-        .p2 { background: #fdcb6e; } /* AI */
-    </style>
 </head>
 <body>
-    <h1>Connect 4 vs AI</h1>
-    <h3 id="status">Loading AI...</h3>
-    <div id="board"></div>
+    <h1>Connect 4 AI Engine</h1>
+    <p>Check the Browser Console (F12) to see the AI load and calculate.</p>
 
     <script>
-        let board = Array(6).fill().map(() => Array(7).fill(0));
-        let weights = null;
-        let isHumanTurn = true;
+        // 1. The Model Data
+        let model = { weights: null };
 
-        async function init() {
+        // 2. Load the model
+        async function loadModel() {
             try {
-                const res = await fetch('./2000.json');
-                weights = await res.json();
-                document.getElementById('status').innerText = "AI Loaded. Your turn!";
-                render();
+                const response = await fetch('2000.json');
+                model.weights = await response.json();
+                console.log("Model loaded successfully.");
             } catch (e) {
-                document.getElementById('status').innerText = "Error loading 2000.json: " + e.message;
+                console.error("Error loading 2000.json. Make sure you are running a local server!", e);
             }
         }
 
-        // The Brain: Manual Forward Pass
-        function getAiMove(currentBoard) {
-            if (!weights || !weights.l1_w) {
-                console.log("CRITICAL: Weights are not loaded or structured incorrectly.");
-                return -1;
-            }
-        
-            const mask = currentBoard[0].map(c => c === 0 ? 1 : 0);
-            const flat = currentBoard.flat();
-            
-            const matMul = (x, w, b) => b.map((bias, col) => 
-                bias + x.reduce((acc, val, row) => acc + val * w[row][col], 0)
-            );
-            const relu = (x) => x.map(v => Math.max(0, v));
-        
-            try {
-                let l1 = relu(matMul(flat, weights.l1_w, weights.l1_b));
-                let l2 = relu(matMul(l1, weights.l2_w, weights.l2_b));
-                let logits = matMul(l2, weights.l3_w, weights.l3_b);
-                
-                const maskedLogits = logits.map((val, i) => mask[i] === 0 ? -1e9 : val);
-                const bestAction = maskedLogits.indexOf(Math.max(...maskedLogits));
-                
-                console.log("AI Logits:", maskedLogits); // This will tell us if it's working
-                return bestAction;
-            } catch (err) {
-                console.log("Math Error in Forward Pass:", err);
-                return -1;
-            }
-        }
-
-        async function playMove(col) {
-            if (!isHumanTurn || board[0][col] !== 0) return;
-
-            // Human move
-            for (let r = 5; r >= 0; r--) {
-                if (board[r][col] === 0) {
-                    board[r][col] = 1;
-                    break;
+        // 3. The Logic
+        function forwardPass(input) {
+            const { W1, b1 } = model.weights;
+            let output = new Float32Array(W1.length);
+            for (let i = 0; i < W1.length; i++) {
+                let sum = b1[i];
+                for (let j = 0; j < input.length; j++) {
+                    sum += input[j] * W1[i][j];
                 }
+                output[i] = Math.tanh(sum);
             }
-            render();
-            
-            isHumanTurn = false;
-            document.getElementById('status').innerText = "AI is thinking...";
-            
-            // AI move
-            setTimeout(() => {
-                const action = getAiMove(board);
-                if (action !== -1) {
-                    for (let r = 5; r >= 0; r--) {
-                        if (board[r][action] === 0) {
-                            board[r][action] = 2;
-                            break;
-                        }
-                    }
-                }
-                render();
-                isHumanTurn = true;
-                document.getElementById('status').innerText = "Your turn!";
-            }, 500);
+            return output;
         }
 
-        function render() {
-            const boardDiv = document.getElementById('board');
-            boardDiv.innerHTML = '';
-            board.flat().forEach((val, i) => {
-                const cell = document.createElement('div');
-                cell.className = 'cell' + (val === 1 ? ' p1' : val === 2 ? ' p2' : '');
-                cell.onclick = () => playMove(i % 7);
-                boardDiv.appendChild(cell);
-            });
+        async function runAI(boardState) {
+            if (!model.weights) await loadModel();
+            const probabilities = forwardPass(new Float32Array(boardState));
+            return probabilities.indexOf(Math.max(...probabilities));
         }
 
-        init();
+        // 4. Initialization: Run this when the page loads
+        window.onload = async () => {
+            await loadModel();
+            
+            // Test input (42 zeros for an empty 6x7 board)
+            const testBoard = new Array(42).fill(0);
+            const move = await runAI(testBoard);
+            console.log("AI decided to play in column:", move);
+        };
     </script>
 </body>
 </html>
