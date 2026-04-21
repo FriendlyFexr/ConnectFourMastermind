@@ -8,24 +8,29 @@
     <p>Check the Browser Console (F12) to see the AI load and calculate.</p>
 
     <script>
-        // 1. The Model Data
         let model = { weights: null };
-
-        // 2. Load the model
+    
         async function loadModel() {
             try {
                 const response = await fetch('2000.json');
-                model.weights = await response.json();
-                console.log("Model loaded successfully.");
+                const data = await response.json();
+                model.weights = data; 
+                console.log("Model structure loaded:", Object.keys(data));
             } catch (e) {
-                console.error("Error loading 2000.json. Make sure you are running a local server!", e);
+                console.error("Failed to load 2000.json", e);
             }
         }
-
-        // 3. The Logic
+    
         function forwardPass(input) {
+            // SAFETY CHECK: Ensure weights exist
+            if (!model.weights || !model.weights.W1) {
+                console.error("Weights not found! Ensure 2000.json has 'W1' and 'b1' keys.");
+                return null;
+            }
+    
             const { W1, b1 } = model.weights;
             let output = new Float32Array(W1.length);
+            
             for (let i = 0; i < W1.length; i++) {
                 let sum = b1[i];
                 for (let j = 0; j < input.length; j++) {
@@ -35,21 +40,22 @@
             }
             return output;
         }
-
+    
         async function runAI(boardState) {
+            // Wait until loadModel finishes before proceeding
             if (!model.weights) await loadModel();
-            const probabilities = forwardPass(new Float32Array(boardState));
-            return probabilities.indexOf(Math.max(...probabilities));
+            
+            const result = forwardPass(new Float32Array(boardState));
+            if (result) {
+                return result.indexOf(Math.max(...result));
+            }
         }
-
-        // 4. Initialization: Run this when the page loads
+    
         window.onload = async () => {
             await loadModel();
-            
-            // Test input (42 zeros for an empty 6x7 board)
             const testBoard = new Array(42).fill(0);
             const move = await runAI(testBoard);
-            console.log("AI decided to play in column:", move);
+            console.log("AI Move:", move);
         };
     </script>
 </body>
