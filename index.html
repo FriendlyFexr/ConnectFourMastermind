@@ -2,23 +2,24 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Connect 4 vs AI</title>
+    <title>Connect 4 AI</title>
     <style>
-        body { font-family: sans-serif; display: flex; flex-direction: column; align-items: center; }
-        #board { display: grid; grid-template-columns: repeat(7, 60px); gap: 5px; margin-top: 20px; background: #333; padding: 10px; border-radius: 8px; }
-        .cell { width: 60px; height: 60px; background: #eee; border-radius: 50%; cursor: pointer; }
-        .p1 { background: #ff4757; }
-        .p2 { background: #ffa502; }
+        body { font-family: sans-serif; display: flex; flex-direction: column; align-items: center; background: #f0f2f5; }
+        #board { display: grid; grid-template-columns: repeat(7, 60px); gap: 5px; margin-top: 20px; background: #2d3436; padding: 10px; border-radius: 8px; }
+        .cell { width: 60px; height: 60px; background: #dfe6e9; border-radius: 50%; cursor: pointer; }
+        .p1 { background: #d63031; } /* Human */
+        .p2 { background: #fdcb6e; } /* AI */
     </style>
 </head>
 <body>
     <h1>Connect 4 vs AI</h1>
+    <h3 id="status">Loading AI...</h3>
     <div id="board"></div>
-    <p id="status">Loading AI...</p>
 
     <script>
         let board = Array(6).fill().map(() => Array(7).fill(0));
         let weights = null;
+        let isHumanTurn = true;
 
         async function init() {
             try {
@@ -27,53 +28,58 @@
                 document.getElementById('status').innerText = "AI Loaded. Your turn!";
                 render();
             } catch (e) {
-                document.getElementById('status').innerText = "Error loading JSON: " + e.message;
+                document.getElementById('status').innerText = "Error loading 2000.json: " + e.message;
             }
         }
 
-        function forward(input, mask) {
-            function matMul(x, w, b) {
-                // w is [input_size][output_size]
-                return b.map((bias, col) => 
-                    bias + x.reduce((acc, val, row) => acc + val * w[row][col], 0)
-                );
-            }
-            function relu(x) { return x.map(v => Math.max(0, v)); }
+        // The Brain: Manual Forward Pass
+        function getAiMove(currentBoard) {
+            const mask = currentBoard[0].map(c => c === 0 ? 1 : 0);
+            const flat = currentBoard.flat();
+            
+            // Linear Layer function
+            const matMul = (x, w, b) => b.map((bias, col) => bias + x.reduce((acc, val, row) => acc + val * w[row][col], 0));
+            const relu = (x) => x.map(v => Math.max(0, v));
 
-            let l1 = relu(matMul(input, weights.l1_w, weights.l1_b));
+            let l1 = relu(matMul(flat, weights.l1_w, weights.l1_b));
             let l2 = relu(matMul(l1, weights.l2_w, weights.l2_b));
             let logits = matMul(l2, weights.l3_w, weights.l3_b);
             
-            return logits.map((val, i) => mask[i] === 0 ? -1e9 : val);
+            // Apply mask and find best action
+            const maskedLogits = logits.map((val, i) => mask[i] === 0 ? -1e9 : val);
+            return maskedLogits.indexOf(Math.max(...maskedLogits));
         }
 
         async function playMove(col) {
-            // Player move
+            if (!isHumanTurn || board[0][col] !== 0) return;
+
+            // Human move
             for (let r = 5; r >= 0; r--) {
                 if (board[r][col] === 0) {
                     board[r][col] = 1;
-                    render();
-                    setTimeout(aiTurn, 300);
-                    return;
-                }
-            }
-        }
-
-        function aiTurn() {
-            if (!weights) return;
-            const mask = board[0].map(c => c === 0 ? 1 : 0);
-            const logits = forward(board.flat(), mask);
-            const action = logits.indexOf(Math.max(...logits));
-
-            if (action !== -1) {
-                for (let r = 5; r >= 0; r--) {
-                    if (board[r][action] === 0) {
-                        board[r][action] = 2;
-                        break;
-                    }
+                    break;
                 }
             }
             render();
+            
+            isHumanTurn = false;
+            document.getElementById('status').innerText = "AI is thinking...";
+            
+            // AI move
+            setTimeout(() => {
+                const action = getAiMove(board);
+                if (action !== -1) {
+                    for (let r = 5; r >= 0; r--) {
+                        if (board[r][action] === 0) {
+                            board[r][action] = 2;
+                            break;
+                        }
+                    }
+                }
+                render();
+                isHumanTurn = true;
+                document.getElementById('status').innerText = "Your turn!";
+            }, 500);
         }
 
         function render() {
