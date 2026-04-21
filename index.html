@@ -61,14 +61,22 @@
         async function runAI(board) {
             if (!model.weights) await loadModel();
             
-            console.log("AI Input Board Array:", board); // Debug 1: See what the AI sees
-            
             const probs = forwardPass(new Float32Array(board));
             
-            console.log("AI Output Probabilities:", probs); // Debug 2: See how confident the AI is
+            // Create a copy of probabilities so we don't change the original
+            let maskedProbs = Array.from(probs);
             
-            const move = probs.indexOf(Math.max(...probs));
-            console.log("AI Chosen Column:", move); // Debug 3: See the final decision
+            // Check each column (0-6)
+            for (let col = 0; col < 7; col++) {
+                // If the top cell of this column is filled (not 0), it's full
+                if (board[col] !== 0) { 
+                    maskedProbs[col] = -Infinity; // Make this column unpickable
+                }
+            }
+            
+            const move = maskedProbs.indexOf(Math.max(...maskedProbs));
+            console.log("AI Masked Probabilities:", maskedProbs);
+            console.log("AI Chosen Valid Column:", move);
             
             return move;
         }
