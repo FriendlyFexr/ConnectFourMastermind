@@ -1,67 +1,110 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-    <title>Connect 4 AI</title>
+    <meta charset="UTF-8">
+    <title>Connect 4 AI Mastermind</title>
+    <style>
+        body { font-family: sans-serif; display: flex; flex-direction: column; align-items: center; }
+        #board {
+            display: grid;
+            grid-template-columns: repeat(7, 50px);
+            grid-template-rows: repeat(6, 50px);
+            gap: 5px;
+            background: #00008B;
+            padding: 10px;
+            border-radius: 10px;
+        }
+        .cell {
+            width: 50px;
+            height: 50px;
+            background: white;
+            border-radius: 50%;
+            cursor: pointer;
+        }
+    </style>
 </head>
 <body>
-    <h1>Connect 4 AI Engine</h1>
-    <p>Check the Browser Console (F12) to see the AI load and calculate.</p>
+
+    <h1>Connect 4 AI</h1>
+    <div id="board"></div>
 
     <script>
         let model = { weights: null };
-    
+        let boardState = new Array(42).fill(0); // 0: empty, 1: human, -1: AI
+
+        // 1. Load Model
         async function loadModel() {
             try {
                 const response = await fetch('2000.json');
-                const data = await response.json();
-                model.weights = data; 
-                console.log("Model structure loaded:", Object.keys(data));
-            } catch (e) {
-                console.error("Failed to load 2000.json", e);
-            }
+                model.weights = await response.json();
+                console.log("Model loaded successfully.");
+            } catch (e) { console.error("Error loading JSON:", e); }
         }
-    
+
+        // 2. Forward Pass (3-Layer Logic)
         function forwardPass(input) {
-            const weights = model.weights;
-            
-            // Helper to perform: activation(dot(input, W) + b)
-            function layer(inputData, W, b, isLast) {
-                let output = new Float32Array(W.length);
+            const w = model.weights;
+            function layer(data, W, b, isLast) {
+                let out = new Float32Array(W.length);
                 for (let i = 0; i < W.length; i++) {
                     let sum = b[i];
-                    for (let j = 0; j < inputData.length; j++) {
-                        sum += inputData[j] * W[i][j];
-                    }
-                    // Use Tanh for hidden layers, maybe Identity or Softmax for last
-                    output[i] = isLast ? sum : Math.tanh(sum); 
+                    for (let j = 0; j < data.length; j++) sum += data[j] * W[i][j];
+                    out[i] = isLast ? sum : Math.tanh(sum);
                 }
-                return output;
+                return out;
             }
-        
-            // Pass through 3 layers
-            let layer1 = layer(input, weights['network.0.weight'], weights['network.0.bias'], false);
-            let layer2 = layer(layer1, weights['network.2.weight'], weights['network.2.bias'], false);
-            let finalOutput = layer(layer2, weights['network.4.weight'], weights['network.4.bias'], true);
-            
-            return finalOutput;
+            let l1 = layer(input, w['network.0.weight'], w['network.0.bias'], false);
+            let l2 = layer(l1, w['network.2.weight'], w['network.2.bias'], false);
+            return layer(l2, w['network.4.weight'], w['network.4.bias'], true);
         }
-    
-        async function runAI(boardState) {
-            // Wait until loadModel finishes before proceeding
+
+        async function runAI(board) {
             if (!model.weights) await loadModel();
-            
-            const result = forwardPass(new Float32Array(boardState));
-            if (result) {
-                return result.indexOf(Math.max(...result));
-            }
+            const probs = forwardPass(new Float32Array(board));
+            return probs.indexOf(Math.max(...probs));
         }
-    
-        window.onload = async () => {
-            await loadModel();
-            const testBoard = new Array(42).fill(0);
-            const move = await runAI(testBoard);
-            console.log("AI Move:", move);
-        };
+
+        // 3. UI Logic
+        const boardEl = document.getElementById('board');
+        function updateVisuals() {
+            const cells = document.querySelectorAll('.cell');
+            boardState.forEach((val, i) => {
+                if (val === 1) cells[i].style.background = 'red';
+                else if (val === -1) cells[i].style.background = 'yellow';
+            });
+        }
+
+        async function handleMove(col) {
+            // Human Turn
+            for (let r = 5; r >= 0; r--) {
+                if (boardState[r * 7 + col] === 0) {
+                    boardState[r * 7 + col] = 1;
+                    break;
+                }
+            }
+            updateVisuals();
+
+            // AI Turn
+            const aiCol = await runAI(boardState);
+            for (let r = 5; r >= 0; r--) {
+                if (boardState[r * 7 + aiCol] === 0) {
+                    boardState[r * 7 + aiCol] = -1;
+                    break;
+                }
+            }
+            updateVisuals();
+        }
+
+        // Initialize
+        (function init() {
+            loadModel();
+            for (let i = 0; i < 42; i++) {
+                const cell = document.createElement('div');
+                cell.className = 'cell';
+                cell.onclick = () => handleMove(i % 7);
+                boardEl.appendChild(cell);
+            }
+        })();
     </script>
 </body>
 </html>
