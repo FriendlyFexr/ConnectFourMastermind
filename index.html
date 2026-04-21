@@ -22,23 +22,28 @@
         }
     
         function forwardPass(input) {
-            // SAFETY CHECK: Ensure weights exist
-            if (!model.weights || !model.weights.W1) {
-                console.error("Weights not found! Ensure 2000.json has 'W1' and 'b1' keys.");
-                return null;
-            }
-    
-            const { W1, b1 } = model.weights;
-            let output = new Float32Array(W1.length);
+            const weights = model.weights;
             
-            for (let i = 0; i < W1.length; i++) {
-                let sum = b1[i];
-                for (let j = 0; j < input.length; j++) {
-                    sum += input[j] * W1[i][j];
+            // Helper to perform: activation(dot(input, W) + b)
+            function layer(inputData, W, b, isLast) {
+                let output = new Float32Array(W.length);
+                for (let i = 0; i < W.length; i++) {
+                    let sum = b[i];
+                    for (let j = 0; j < inputData.length; j++) {
+                        sum += inputData[j] * W[i][j];
+                    }
+                    // Use Tanh for hidden layers, maybe Identity or Softmax for last
+                    output[i] = isLast ? sum : Math.tanh(sum); 
                 }
-                output[i] = Math.tanh(sum);
+                return output;
             }
-            return output;
+        
+            // Pass through 3 layers
+            let layer1 = layer(input, weights['network.0.weight'], weights['network.0.bias'], false);
+            let layer2 = layer(layer1, weights['network.2.weight'], weights['network.2.bias'], false);
+            let finalOutput = layer(layer2, weights['network.4.weight'], weights['network.4.bias'], true);
+            
+            return finalOutput;
         }
     
         async function runAI(boardState) {
