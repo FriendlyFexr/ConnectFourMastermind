@@ -60,8 +60,17 @@
 
         async function runAI(board) {
             if (!model.weights) await loadModel();
+            
+            console.log("AI Input Board Array:", board); // Debug 1: See what the AI sees
+            
             const probs = forwardPass(new Float32Array(board));
-            return probs.indexOf(Math.max(...probs));
+            
+            console.log("AI Output Probabilities:", probs); // Debug 2: See how confident the AI is
+            
+            const move = probs.indexOf(Math.max(...probs));
+            console.log("AI Chosen Column:", move); // Debug 3: See the final decision
+            
+            return move;
         }
 
         // 3. UI Logic
@@ -75,22 +84,38 @@
         }
 
         async function handleMove(col) {
+            console.log("Human played column:", col);
+            
             // Human Turn
+            let humanPlaced = false;
             for (let r = 5; r >= 0; r--) {
                 if (boardState[r * 7 + col] === 0) {
                     boardState[r * 7 + col] = 1;
+                    humanPlaced = true;
                     break;
                 }
             }
+            
+            if (!humanPlaced) {
+                console.warn("Column full, ignoring move!");
+                return;
+            }
             updateVisuals();
-
+        
             // AI Turn
             const aiCol = await runAI(boardState);
+            
+            let aiPlaced = false;
             for (let r = 5; r >= 0; r--) {
                 if (boardState[r * 7 + aiCol] === 0) {
                     boardState[r * 7 + aiCol] = -1;
+                    aiPlaced = true;
                     break;
                 }
+            }
+            
+            if (!aiPlaced) {
+                console.error("AI tried to play in a full column!");
             }
             updateVisuals();
         }
