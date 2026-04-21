@@ -4,8 +4,9 @@
     <meta charset="UTF-8">
     <title>Connect 4 vs AI</title>
     <style>
-        #board { display: grid; grid-template-columns: repeat(7, 60px); gap: 5px; margin-top: 20px; }
-        .cell { width: 60px; height: 60px; background: #eee; border-radius: 50%; border: 1px solid #333; cursor: pointer; }
+        body { font-family: sans-serif; display: flex; flex-direction: column; align-items: center; }
+        #board { display: grid; grid-template-columns: repeat(7, 60px); gap: 5px; margin-top: 20px; background: #333; padding: 10px; border-radius: 8px; }
+        .cell { width: 60px; height: 60px; background: #eee; border-radius: 50%; cursor: pointer; }
         .p1 { background: #ff4757; }
         .p2 { background: #ffa502; }
     </style>
@@ -13,23 +14,29 @@
 <body>
     <h1>Connect 4 vs AI</h1>
     <div id="board"></div>
+    <p id="status">Loading AI...</p>
 
     <script>
         let board = Array(6).fill().map(() => Array(7).fill(0));
         let weights = null;
 
         async function init() {
-            // Load your JSON model
-            const res = await fetch('./2000.json');
-            weights = await res.json(); // Assumes JSON contains 'l1_w', 'l1_b', 'l2_w', 'l2_b', 'l3_w', 'l3_b'
-            render();
+            try {
+                const res = await fetch('./2000.json');
+                weights = await res.json();
+                document.getElementById('status').innerText = "AI Loaded. Your turn!";
+                render();
+            } catch (e) {
+                document.getElementById('status').innerText = "Error loading JSON: " + e.message;
+            }
         }
 
-        // Manual Matrix Multiplication for Forward Pass
         function forward(input, mask) {
             function matMul(x, w, b) {
-                let res = b.map((val, i) => val + x.reduce((acc, curr, j) => acc + curr * w[j][i], 0));
-                return res;
+                // w is [input_size][output_size]
+                return b.map((bias, col) => 
+                    bias + x.reduce((acc, val, row) => acc + val * w[row][col], 0)
+                );
             }
             function relu(x) { return x.map(v => Math.max(0, v)); }
 
@@ -37,30 +44,33 @@
             let l2 = relu(matMul(l1, weights.l2_w, weights.l2_b));
             let logits = matMul(l2, weights.l3_w, weights.l3_b);
             
-            // Apply mask to logits
-            return logits.map((val, i) => mask[i] === 0 ? val - 1e9 : val);
+            return logits.map((val, i) => mask[i] === 0 ? -1e9 : val);
         }
 
         async function playMove(col) {
+            // Player move
             for (let r = 5; r >= 0; r--) {
                 if (board[r][col] === 0) {
                     board[r][col] = 1;
-                    break;
+                    render();
+                    setTimeout(aiTurn, 300);
+                    return;
                 }
             }
-            render();
-            setTimeout(aiTurn, 500);
         }
 
         function aiTurn() {
+            if (!weights) return;
             const mask = board[0].map(c => c === 0 ? 1 : 0);
             const logits = forward(board.flat(), mask);
             const action = logits.indexOf(Math.max(...logits));
 
-            for (let r = 5; r >= 0; r--) {
-                if (board[r][action] === 0) {
-                    board[r][action] = 2;
-                    break;
+            if (action !== -1) {
+                for (let r = 5; r >= 0; r--) {
+                    if (board[r][action] === 0) {
+                        board[r][action] = 2;
+                        break;
+                    }
                 }
             }
             render();
