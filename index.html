@@ -34,20 +34,33 @@
 
         // The Brain: Manual Forward Pass
         function getAiMove(currentBoard) {
+            if (!weights || !weights.l1_w) {
+                console.log("CRITICAL: Weights are not loaded or structured incorrectly.");
+                return -1;
+            }
+        
             const mask = currentBoard[0].map(c => c === 0 ? 1 : 0);
             const flat = currentBoard.flat();
             
-            // Linear Layer function
-            const matMul = (x, w, b) => b.map((bias, col) => bias + x.reduce((acc, val, row) => acc + val * w[row][col], 0));
+            const matMul = (x, w, b) => b.map((bias, col) => 
+                bias + x.reduce((acc, val, row) => acc + val * w[row][col], 0)
+            );
             const relu = (x) => x.map(v => Math.max(0, v));
-
-            let l1 = relu(matMul(flat, weights.l1_w, weights.l1_b));
-            let l2 = relu(matMul(l1, weights.l2_w, weights.l2_b));
-            let logits = matMul(l2, weights.l3_w, weights.l3_b);
-            
-            // Apply mask and find best action
-            const maskedLogits = logits.map((val, i) => mask[i] === 0 ? -1e9 : val);
-            return maskedLogits.indexOf(Math.max(...maskedLogits));
+        
+            try {
+                let l1 = relu(matMul(flat, weights.l1_w, weights.l1_b));
+                let l2 = relu(matMul(l1, weights.l2_w, weights.l2_b));
+                let logits = matMul(l2, weights.l3_w, weights.l3_b);
+                
+                const maskedLogits = logits.map((val, i) => mask[i] === 0 ? -1e9 : val);
+                const bestAction = maskedLogits.indexOf(Math.max(...maskedLogits));
+                
+                console.log("AI Logits:", maskedLogits); // This will tell us if it's working
+                return bestAction;
+            } catch (err) {
+                console.log("Math Error in Forward Pass:", err);
+                return -1;
+            }
         }
 
         async function playMove(col) {
