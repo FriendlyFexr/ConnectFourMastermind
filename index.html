@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Connect 4 vs AI</title>
+    <style>
+        #board { display: grid; grid-template-columns: repeat(7, 60px); gap: 5px; margin-top: 20px; }
+        .cell { width: 60px; height: 60px; background: #eee; border-radius: 50%; border: 1px solid #333; cursor: pointer; }
+        .p1 { background: #ff4757; }
+        .p2 { background: #ffa502; }
+    </style>
+</head>
+<body>
+    <h1>Connect 4 vs AI</h1>
+    <div id="board"></div>
+
+    <script>
+        let board = Array(6).fill().map(() => Array(7).fill(0));
+        let weights = null;
+
+        async function init() {
+            // Load your JSON model
+            const res = await fetch('./2000.json');
+            weights = await res.json(); // Assumes JSON contains 'l1_w', 'l1_b', 'l2_w', 'l2_b', 'l3_w', 'l3_b'
+            render();
+        }
+
+        // Manual Matrix Multiplication for Forward Pass
+        function forward(input, mask) {
+            function matMul(x, w, b) {
+                let res = b.map((val, i) => val + x.reduce((acc, curr, j) => acc + curr * w[j][i], 0));
+                return res;
+            }
+            function relu(x) { return x.map(v => Math.max(0, v)); }
+
+            let l1 = relu(matMul(input, weights.l1_w, weights.l1_b));
+            let l2 = relu(matMul(l1, weights.l2_w, weights.l2_b));
+            let logits = matMul(l2, weights.l3_w, weights.l3_b);
+            
+            // Apply mask to logits
+            return logits.map((val, i) => mask[i] === 0 ? val - 1e9 : val);
+        }
+
+        async function playMove(col) {
+            for (let r = 5; r >= 0; r--) {
+                if (board[r][col] === 0) {
+                    board[r][col] = 1;
+                    break;
+                }
+            }
+            render();
+            setTimeout(aiTurn, 500);
+        }
+
+        function aiTurn() {
+            const mask = board[0].map(c => c === 0 ? 1 : 0);
+            const logits = forward(board.flat(), mask);
+            const action = logits.indexOf(Math.max(...logits));
+
+            for (let r = 5; r >= 0; r--) {
+                if (board[r][action] === 0) {
+                    board[r][action] = 2;
+                    break;
+                }
+            }
+            render();
+        }
+
+        function render() {
+            const boardDiv = document.getElementById('board');
+            boardDiv.innerHTML = '';
+            board.flat().forEach((val, i) => {
+                const cell = document.createElement('div');
+                cell.className = 'cell' + (val === 1 ? ' p1' : val === 2 ? ' p2' : '');
+                cell.onclick = () => playMove(i % 7);
+                boardDiv.appendChild(cell);
+            });
+        }
+
+        init();
+    </script>
+</body>
+</html>
