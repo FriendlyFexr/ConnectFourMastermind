@@ -35,7 +35,7 @@
         // 1. Load Model
         async function loadModel() {
             try {
-                const response = await fetch('2000.json');
+                const response = await fetch('20000.json');
                 model.weights = await response.json();
                 console.log("Model loaded successfully.");
             } catch (e) { console.error("Error loading JSON:", e); }
